@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { RPMForm } from './components/RPMForm';
 import { RPMDisplay } from './components/RPMDisplay';
 import type { FormData, RPMData } from './types';
@@ -11,6 +11,18 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const savedRpmData = localStorage.getItem('lastRpmData');
+    if (savedRpmData) {
+      try {
+        setRpmData(JSON.parse(savedRpmData));
+      } catch (e) {
+        console.error("Gagal mem-parsing data RPM dari localStorage", e);
+        localStorage.removeItem('lastRpmData');
+      }
+    }
+  }, []);
+
   const handleGenerate = useCallback(async (formData: FormData) => {
     setIsLoading(true);
     setError(null);
@@ -18,6 +30,7 @@ const App: React.FC = () => {
     try {
       const result = await generateRPM(formData);
       setRpmData(result);
+      localStorage.setItem('lastRpmData', JSON.stringify(result));
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat membuat RPM. Silakan coba lagi.');
@@ -31,7 +44,7 @@ const App: React.FC = () => {
       <header className="bg-white dark:bg-gray-800 shadow-md">
         <div className="container mx-auto px-4 py-6">
           <h1 className="text-2xl md:text-3xl font-bold text-center text-gray-800 dark:text-white">
-            Guru Keren Pak Dedyputunesanusi
+           
           </h1>
           <p className="text-center text-lg text-gray-600 dark:text-gray-300">
             Generator Rencana Pembelajaran Mendalam (RPM)
@@ -59,16 +72,9 @@ const App: React.FC = () => {
             )}
             {rpmData && !isLoading && (
               <RPMDisplay data={rpmData} />
-            )}
-            {!rpmData && !isLoading && !error && (
-                 <div className="flex flex-col items-center justify-center h-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-                    <h2 className="text-xl font-bold text-gray-700 dark:text-gray-200">Selamat Datang!</h2>
-                    <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
-                        Isi formulir di sebelah kiri untuk mulai membuat Rencana Pembelajaran Mendalam Anda.
-                    </p>
-                    <img src="https://picsum.photos/400/300" alt="Placeholder" className="mt-6 rounded-lg shadow-md" />
-                </div>
-            )}
+        
+            
+            
           </div>
         </div>
       </main>

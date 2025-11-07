@@ -1,8 +1,12 @@
-
 import React, { useRef, useState } from 'react';
 import type { RPMData } from '../types';
 import { CopyIcon } from './icons/CopyIcon';
 import { GoogleDocsIcon } from './icons/GoogleDocsIcon';
+import { PdfIcon } from './icons/PdfIcon';
+
+// Declare global variables from CDN scripts for TypeScript
+declare const html2canvas: any;
+declare const jspdf: any;
 
 interface RPMDisplayProps {
   data: RPMData;
@@ -26,6 +30,7 @@ const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, ch
 export const RPMDisplay: React.FC<RPMDisplayProps> = ({ data }) => {
     const outputRef = useRef<HTMLDivElement>(null);
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
 
     const handleCopy = () => {
         if (!outputRef.current) return;
@@ -44,15 +49,68 @@ export const RPMDisplay: React.FC<RPMDisplayProps> = ({ data }) => {
         });
     };
 
+    const handleExportPdf = async () => {
+        if (!outputRef.current) return;
+        setIsGeneratingPdf(true);
+
+        try {
+            const { jsPDF } = jspdf;
+            const canvas = await html2canvas(outputRef.current, {
+                scale: 2, // Higher scale for better quality
+            });
+
+            // A4 page size in mm: 210 x 297
+            const pageWidth = 210;
+            const pageHeight = 297;
+            const margin = 15;
+            
+            const contentWidth = pageWidth - (margin * 2);
+            const contentHeight = canvas.height * contentWidth / canvas.width;
+            
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            
+            let position = 0;
+            const pageContentHeight = pageHeight - (margin * 2);
+
+            let heightLeft = contentHeight;
+            
+            pdf.addImage(canvas, 'PNG', margin, position + margin, contentWidth, contentHeight);
+            heightLeft -= pageContentHeight;
+
+            while (heightLeft > 0) {
+                position -= pageContentHeight;
+                pdf.addPage();
+                pdf.addImage(canvas, 'PNG', margin, position + margin, contentWidth, contentHeight);
+                heightLeft -= pageContentHeight;
+            }
+
+            pdf.save(`RPM-${data.identitas.mataPelajaran.replace(/\s/g, '_')}.pdf`);
+
+        } catch (err) {
+            console.error("Failed to generate PDF:", err);
+            alert("Gagal membuat PDF. Silakan coba lagi.");
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    };
+
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-end mb-4 space-x-2">
+                 <button
+                    onClick={handleExportPdf}
+                    disabled={isGeneratingPdf}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 dark:bg-red-500 dark:hover:bg-red-600 dark:focus:ring-red-800 disabled:bg-red-300 dark:disabled:bg-red-800 disabled:cursor-not-allowed"
+                >
+                    <PdfIcon />
+                    {isGeneratingPdf ? 'Membuat PDF...' : 'Ekspor ke PDF'}
+                </button>
                 <button
                     onClick={handleCopy}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300 dark:bg-green-500 dark:hover:bg-green-600 dark:focus:ring-green-800"
                 >
                     {copyStatus === 'idle' ? <CopyIcon /> : <GoogleDocsIcon />}
-                    {copyStatus === 'idle' ? 'Salin & Buka di Google Dokumen' : 'Disalin! Buka Docs'}
+                    {copyStatus === 'idle' ? 'Salin & Buka Google Docs' : 'Disalin! Buka Docs'}
                 </button>
             </div>
             <div ref={outputRef}>

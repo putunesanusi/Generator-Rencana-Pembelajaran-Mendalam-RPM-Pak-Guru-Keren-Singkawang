@@ -9,30 +9,28 @@ interface RPMFormProps {
   isLoading: boolean;
 }
 
-const InputField: React.FC<{label: string; id: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; required?: boolean; placeholder?: string; type?: string;}> = ({ label, id, ...props }) => (
+const InputField: React.FC<{label: string; id: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; required?: boolean; placeholder?: string; type?: string; name: string; min?: string;}> = ({ label, id, ...props }) => (
     <div>
         <label htmlFor={id} className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">{label}</label>
         <input id={id} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" {...props} />
     </div>
 );
 
-const TextareaField: React.FC<{label: string; id: string; value: string; onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void; required?: boolean; placeholder?: string; rows?: number;}> = ({ label, id, ...props }) => (
+const TextareaField: React.FC<{label: string; id: string; value: string; onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void; required?: boolean; placeholder?: string; rows?: number; name: string;}> = ({ label, id, ...props }) => (
     <div>
         <label htmlFor={id} className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">{label}</label>
         <textarea id={id} className="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" {...props}></textarea>
     </div>
 );
 
-const SelectField: React.FC<{label: string; id: string; value: string; onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void; required?: boolean; children: React.ReactNode}> = ({ label, id, ...props }) => (
+const SelectField: React.FC<{label: string; id: string; value: string; onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void; required?: boolean; children: React.ReactNode; name: string;}> = ({ label, id, ...props }) => (
     <div>
         <label htmlFor={id} className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">{label}</label>
         <select id={id} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" {...props} />
     </div>
 );
 
-
-export const RPMForm: React.FC<RPMFormProps> = ({ onSubmit, isLoading }) => {
-  const [formState, setFormState] = useState<FormData>({
+const defaultFormState: FormData = {
     schoolName: '',
     teacherName: '',
     teacherNip: '',
@@ -48,26 +46,55 @@ export const RPMForm: React.FC<RPMFormProps> = ({ onSubmit, isLoading }) => {
     meetingDuration: '2 x 45 menit',
     pedagogicalPractices: [PedagogicalPractice.INQUIRY_DISCOVERY],
     graduateDimensions: [],
+};
+
+export const RPMForm: React.FC<RPMFormProps> = ({ onSubmit, isLoading }) => {
+  const [formState, setFormState] = useState<FormData>(() => {
+    const savedData = localStorage.getItem('rpmFormData');
+    if (savedData) {
+        try {
+            const parsed = JSON.parse(savedData) as FormData;
+            if (parsed.meetings > 0 && parsed.pedagogicalPractices.length !== parsed.meetings) {
+               parsed.pedagogicalPractices = Array.from({length: parsed.meetings}, (_, i) => parsed.pedagogicalPractices[i] || PedagogicalPractice.INQUIRY_DISCOVERY);
+            }
+            return { ...defaultFormState, ...parsed };
+        } catch (e) {
+            console.error("Gagal mem-parsing data form dari localStorage", e);
+            return defaultFormState;
+        }
+    }
+    return defaultFormState;
   });
   
   const [grades, setGrades] = useState<string[]>(GRADES[formState.educationLevel]);
 
   useEffect(() => {
-    setGrades(GRADES[formState.educationLevel]);
-    setFormState(prev => ({ ...prev, grade: GRADES[formState.educationLevel][0] }));
-  }, [formState.educationLevel]);
+    localStorage.setItem('rpmFormData', JSON.stringify(formState));
+  }, [formState]);
 
   useEffect(() => {
-    const numMeetings = formState.meetings > 0 ? formState.meetings : 1;
-    setFormState(prev => ({
-      ...prev,
-      pedagogicalPractices: Array(numMeetings).fill(prev.pedagogicalPractices[0] || PedagogicalPractice.INQUIRY_DISCOVERY)
-    }));
-  }, [formState.meetings]);
+    setGrades(GRADES[formState.educationLevel]);
+    if (!GRADES[formState.educationLevel].includes(formState.grade)) {
+      setFormState(prev => ({ ...prev, grade: GRADES[formState.educationLevel][0] }));
+    }
+  }, [formState.educationLevel]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormState(prev => ({ ...prev, [name]: name === 'meetings' ? parseInt(value, 10) : value }));
+    if (name === 'meetings') {
+        const newMeetings = parseInt(value, 10);
+        if (!isNaN(newMeetings) && newMeetings >= 1) {
+             setFormState(prev => {
+                const currentPractices = prev.pedagogicalPractices;
+                const newPractices = Array.from({ length: newMeetings }, (_, i) =>
+                    currentPractices[i] || currentPractices[0] || PedagogicalPractice.INQUIRY_DISCOVERY
+                );
+                return { ...prev, meetings: newMeetings, pedagogicalPractices: newPractices };
+            });
+        }
+    } else {
+        setFormState(prev => ({ ...prev, [name]: value }));
+    }
   };
   
   const handleDimensionChange = (dimension: GraduateDimension) => {
@@ -127,7 +154,7 @@ export const RPMForm: React.FC<RPMFormProps> = ({ onSubmit, isLoading }) => {
                 <div key={i} className="flex items-center gap-2">
                     <span className="text-sm font-medium w-24">Pertemuan {i + 1}:</span>
                     <select
-                        value={formState.pedagogicalPractices[i]}
+                        value={formState.pedagogicalPractices[i] || ''}
                         onChange={(e) => handlePedagogyChange(i, e.target.value as PedagogicalPractice)}
                         className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
                     >
